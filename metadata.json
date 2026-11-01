@@ -1,0 +1,8 @@
+{
+  "name": "try Remix PWA rimix 222: CineLog  (real)  ",
+  "description": "The definitive minimalist cinema diary. Track your movies and series with elegance, featuring high-fidelity recaps and Scandinavian design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

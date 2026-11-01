@@ -1,0 +1,387 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Global styles */
+
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+html {
+  /* Using smooth scroll for in-page anchor links */
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #09090b;
+  color: #fafafa;
+}
+
+/*
+  Premium, native-app micro-interactions:
+  scale(1.03) on hover, scale(0.97) on active/press.
+  Transition 150-200ms duration, cubic-bezier(0.22, 1, 0.36, 1) timing.
+  Wrapped inside prefers-reduced-motion: no-preference to protect motion-sensitive users.
+*/
+.premium-interactive {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .premium-interactive:hover {
+    transform: scale(1.03) translateZ(0);
+  }
+}
+.premium-interactive:active {
+  transform: scale(0.97) translateZ(0);
+}
+
+/* Ensure all critical buttons & touch targets are at least 48x48px on mobile for accessibility */
+.minimum-touch-target {
+  min-width: 48px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* GPU-friendly Skeleton Shimmer using transform: translateX instead of background-position paint cycles */
+@keyframes shimmer-slide {
+  0% {
+    transform: translateX(-100%) translateZ(0);
+  }
+  100% {
+    transform: translateX(100%) translateZ(0);
+  }
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: #18181b;
+}
+
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  animation: shimmer-slide 1.6s infinite ease-in-out;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+@media (max-width: 768px) {
+  .animate-shimmer::after {
+    display: none; /* Static skeleton on mobile devices to completely avoid idle animation frames */
+  }
+}
+
+@keyframes absolute-glow {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1) translateZ(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02) translateZ(0);
+  }
+}
+
+.absolute-glow-active {
+  box-shadow: 0 0 12px rgba(155, 92, 255, 0.35);
+}
+
+@media (min-width: 769px) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .absolute-glow-active {
+    animation: absolute-glow 2.5s infinite ease-in-out;
+  }
+}
+
+@keyframes absolute-sweep {
+  0% {
+    transform: translateX(-150%) skewX(-12deg) translateZ(0);
+  }
+  100% {
+    transform: translateX(150%) skewX(-12deg) translateZ(0);
+  }
+}
+
+.animate-sweep-active {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: translateX(-150%) skewX(-12deg) translateZ(0);
+}
+
+@media (min-width: 769px) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .animate-sweep-active {
+    animation: absolute-sweep 2.5s infinite linear;
+    will-change: transform;
+  }
+}
+
+/* Content-visibility optimization for rendering long card lists without layout cost */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 160px 240px;
+}
+
+/* GPU Layer Utility */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Global Mobile Performance Adjustments */
+@media (max-width: 768px) {
+  * {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .animate-sweep-active {
+    display: none !important;
+  }
+  .absolute-glow-active {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+  /* On mobile phones, completely remove expensive GPU multi-pass backdrop-filters */
+  .backdrop-blur-3xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-xl,
+  .backdrop-blur-lg,
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  .backdrop-blur,
+  .backdrop-blur-\[40px\],
+  .glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Ensure backgrounds of previously blurred elements remain solid and legible */
+  .glass {
+    background-color: rgba(18, 18, 21, 0.96) !important;
+  }
+  /* Shorten interactive transition durations on phones for crisp responsiveness */
+  .transition-all,
+  .transition-transform,
+  .transition-opacity {
+    transition-duration: 150ms !important;
+  }
+  .animate-pulse {
+    animation-duration: 3s !important;
+  }
+}
+
+/* GPU Layer Utility */
+.gpu-layer,
+.gpu-composited {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Screen-reader-only utility class for a11y page titles announcement */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/*
+  MODULAR & FLUID TYPOGRAPHY SCALE (Tailwind v4 Utilities)
+  Derived from 1.25 (Major Third) ratio anchored around 16px (1rem) base body size.
+  Utilizes clamp() to scale headings fluidly between mobile (min) and desktop (max).
+*/
+@utility text-display {
+  font-size: clamp(2.25rem, 6vw, 4rem); /* Mobile: 36px, Desktop: 64px */
+}
+
+@utility text-h1 {
+  font-size: clamp(1.8rem, 5vw, 2.75rem); /* Mobile: 28.8px, Desktop: 44px */
+}
+
+@utility text-h2 {
+  font-size: clamp(1.45rem, 4vw, 2.2rem); /* Mobile: 23px, Desktop: 35px */
+}
+
+@utility text-h3 {
+  font-size: clamp(1.2rem, 3vw, 1.75rem); /* Mobile: 19.2px, Desktop: 28px */
+}
+
+@utility text-h4 {
+  font-size: clamp(1.05rem, 2vw, 1.4rem); /* Mobile: 16.8px, Desktop: 22.4px */
+}
+
+@utility text-body-large {
+  font-size: 1.15rem; /* ~18px stable body-large */
+}
+
+@utility text-body {
+  font-size: 0.9375rem; /* ~15px stable standard body */
+}
+
+@utility text-small {
+  font-size: 0.8125rem; /* ~13px stable subtext */
+}
+
+@utility text-caption {
+  font-size: 0.6875rem; /* ~11px stable micro-metadata */
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Geist Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Ensure desktop sidebar and mobile dock are completely removed when enlarging posters or changing posters */
+body.poster-modal-active aside,
+html.poster-modal-active aside,
+body.poster-modal-active .pwa-bottom-nav,
+html.poster-modal-active .pwa-bottom-nav {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
