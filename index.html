@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <script>
+        // Prevent circular structure errors globally by patch-intercepting JSON.stringify
+        try {
+            const originalStringify = JSON.stringify;
+            JSON.stringify = function(value, replacer, space) {
+                const seen = new WeakSet();
+
+                function safeReplacer(key, val) {
+                    if (val !== null && typeof val === 'object') {
+                        if (seen.has(val)) {
+                            return undefined; // Break circular chain
+                        }
+                        seen.add(val);
+                    }
+                    if (typeof replacer === 'function') {
+                        return replacer.call(this, key, val);
+                    } else if (Array.isArray(replacer)) {
+                        if (key !== '' && !replacer.includes(key)) {
+                            return undefined;
+                        }
+                    }
+                    return val;
+                }
+
+                try {
+                    return originalStringify(value, replacer, space);
+                } catch (e) {
+                    try {
+                        return originalStringify(value, safeReplacer, space);
+                    } catch (err) {
+                        return "{}";
+                    }
+                }
+            };
+        } catch (e) {
+            console.warn('Could not patch JSON.stringify:', e);
+        }
+
+        try {
+            const descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+            if (descriptor && !descriptor.writable && !descriptor.set) {
+                const originalFetch = window.fetch;
+                Object.defineProperty(window, 'fetch', {
+                    configurable: true,
+                    enumerable: true,
+                    get: () => originalFetch,
+                    set: (newFetch) => {
+                        // Ignored to prevent crashes from libraries attempting to override fetch
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Could not patch window.fetch:', e);
+        }
+
+        // Suppress benign Vite WebSocket HMR disconnection unhandled rejections in preview sandbox
+        window.addEventListener('unhandledrejection', (event) => {
+            const msg = event?.reason?.message || (typeof event?.reason === 'string' ? event.reason : '');
+            if (msg && (msg.includes('WebSocket') || msg.includes('websocket') || msg.includes('WebSocket closed'))) {
+                event.preventDefault();
+            }
+        });
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>CineLog — Your Cinema Diary</title>
+
+    <!-- PWA Basic Meta -->
+    <meta name="theme-color" content="#09090b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CineLog">
+    <meta name="description" content="The definitive minimalist cinema diary. Track your movies and series with elegance.">
+
+    <!-- PWA Icons & Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/pwa-icon.png">
+    <link rel="apple-touch-icon" href="/pwa-icon.png">
+
+    <!-- Preconnect resource hints for Google Fonts, TMDB Images & Firebase SDK -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+    <link rel="dns-prefetch" href="https://image.tmdb.org">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js">
+
+    <!-- Non-blocking Inter font with display=swap for zero render-blocking FCP -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+    </noscript>
+
+    <style>
+        @font-face {
+          font-family: 'Micuale';
+          src: local('Micuale'), local('Micuale Black'), local('MicualeExtraBold'), local('Montserrat-Black');
+          font-display: swap;
+        }
+        .font-micuale {
+          font-family: 'Micuale', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          text-transform: uppercase;
+        }
+        :root {
+          --safe-area-inset-top: env(safe-area-inset-top);
+          --safe-area-inset-bottom: env(safe-area-inset-bottom);
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          background-color: #09090b;
+          color: #fafafa;
+          overflow-x: hidden;
+          padding-top: var(--safe-area-inset-top);
+          min-height: 100vh;
+          min-height: 100dvh;
+          text-rendering: optimizeLegibility;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+        html {
+          background-color: #09090b;
+          overflow-x: hidden;
+          scroll-behavior: auto;
+        }
+        #root {
+          min-height: 100vh;
+          min-height: 100dvh;
+          overflow-x: hidden;
+        }
+        .glass {
+          background: rgba(255, 255, 255, 0.03);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* GPU Layer Acceleration Utility */
+        .gpu-layer {
+          transform: translateZ(0);
+          backface-visibility: hidden;
+          perspective: 1000px;
+        }
+
+        /* Content-visibility optimization for rendering long card lists */
+        .content-auto {
+          content-visibility: auto;
+          contain-intrinsic-size: 160px 240px;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        @media (min-width: 769px) and (prefers-reduced-motion: no-preference) {
+          .glow-active {
+            animation: pulse-glow 2s infinite ease-in-out;
+          }
+        }
+        .no-capture { display: none !important; }
+
+        .pwa-bottom-nav {
+          padding-bottom: calc(0.25rem + var(--safe-area-inset-bottom));
+        }
+
+        /* Mobile touch optimization */
+        @media (max-width: 768px) {
+          * {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *, ::before, ::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+          }
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { initializeFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyA6eIZW5kEEg7jX1hXMhjYU2Q5J-PrAxNQ",
+        authDomain: "cinel0g---made-by.firebaseapp.com",
+        projectId: "cinel0g---made-by",
+        storageBucket: "cinel0g---made-by.firebasestorage.app",
+        messagingSenderId: "653715678028",
+        appId: "1:653715678028:web:fb07ce446c7110e6ba25e9"
+      };
+
+      const app = initializeApp(firebaseConfig);
+
+      const db = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+        useFetchStreams: false
+      });
+
+      window.db = db;
+    </script>
+
+    <script type="module">
+      import {
+        collection,
+        addDoc,
+        getDocs,
+        deleteDoc,
+        query,
+        doc,
+        setDoc,
+        updateDoc,
+        orderBy,
+        onSnapshot
+      } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+      function cleanFirestoreData(obj, seen = new WeakSet()) {
+        if (obj === null || obj === undefined) return obj;
+        if (typeof obj !== 'object') return obj;
+        if (seen.has(obj)) return undefined;
+        seen.add(obj);
+
+        if (typeof obj.toDate === 'function') {
+          return obj.toDate().toISOString();
+        }
+
+        if (obj.id && obj.path && typeof obj.path === 'string' && obj.firestore) {
+          return { id: obj.id, path: obj.path };
+        }
+
+        if (Array.isArray(obj)) {
+          return obj.map(item => cleanFirestoreData(item, seen)).filter(item => item !== undefined);
+        }
+
+        if (obj instanceof Date) {
+          return obj.toISOString();
+        }
+
+        const cleaned = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            if (key.startsWith('_') || key === 'firestore' || key === 'db' || key === '_firestore' || key === 'window') {
+              continue;
+            }
+            const val = cleanFirestoreData(obj[key], seen);
+            if (val !== undefined) {
+              cleaned[key] = val;
+            }
+          }
+        }
+        return cleaned;
+      }
+
+      async function addMovie(movie) {
+        try {
+          const docRef = await addDoc(collection(window.db, "movies"), {
+            ...movie,
+            watchedOn: movie.watchDate || new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+          return docRef.id;
+        } catch (e) {
+          console.warn("Firestore Cloud Save Failed:", e.message);
+          return "local-" + Date.now();
+        }
+      }
+
+      async function loadMovies() {
+        try {
+          const q = query(collection(window.db, "movies"));
+          const querySnapshot = await getDocs(q);
+          const movies = [];
+          querySnapshot.forEach((doc) => {
+            movies.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          return movies;
+        } catch (e) {
+          console.warn("Firestore Cloud Load Failed:", e.message);
+          return [];
+        }
+      }
+
+      async function removeMovie(firestoreId) {
+        if (!firestoreId || firestoreId.startsWith('local-')) return;
+        try {
+          await deleteDoc(doc(window.db, "movies", firestoreId));
+        } catch (e) {
+          console.warn("Firestore Cloud Delete Failed:", e.message);
+        }
+      }
+
+      async function updateMovie(firestoreId, data) {
+        if (!firestoreId || firestoreId.startsWith('local-')) return;
+        try {
+          const movieRef = doc(window.db, "movies", firestoreId);
+          await updateDoc(movieRef, data);
+        } catch (e) {
+          console.warn("Firestore Cloud Update Failed:", e.message);
+        }
+      }
+
+      async function loadWatchLists() {
+        try {
+          const querySnapshot = await getDocs(collection(window.db, "watchLists"));
+          const lists = [];
+          querySnapshot.forEach((doc) => {
+            lists.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          return lists;
+        } catch (e) {
+          console.warn("Firestore Lists Load Failed:", e.message);
+          return [];
+        }
+      }
+
+      async function saveWatchList(list) {
+        try {
+          const docRef = await addDoc(collection(window.db, "watchLists"), {
+            name: list.name,
+            items: list.items || []
+          });
+          return docRef.id;
+        } catch (e) {
+          console.warn("Firestore List Save Failed:", e.message);
+          return "local-list-" + Date.now();
+        }
+      }
+
+      async function updateWatchList(id, data) {
+        if (!id || id.startsWith('local-')) return;
+        try {
+          const listRef = doc(window.db, "watchLists", id);
+          await updateDoc(listRef, data);
+        } catch (e) {
+          console.warn("Firestore List Update Failed:", e.message);
+        }
+      }
+
+      async function removeWatchList(id) {
+        if (!id || id.startsWith('local-')) return;
+        try {
+          await deleteDoc(doc(window.db, "watchLists", id));
+        } catch (e) {
+          console.warn("Firestore List Remove Failed:", e.message);
+        }
+      }
+
+      async function loadCustomLists() {
+        try {
+          const querySnapshot = await getDocs(collection(window.db, "customLists"));
+          const lists = [];
+          querySnapshot.forEach((doc) => {
+            lists.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          return lists;
+        } catch (e) {
+          console.warn("Firestore Custom Lists Load Failed:", e.message);
+          return [];
+        }
+      }
+
+      async function saveCustomList(list) {
+        try {
+          const docRef = await addDoc(collection(window.db, "customLists"), {
+            name: list.name,
+            items: list.items || [],
+            createdAt: new Date().toISOString()
+          });
+          return docRef.id;
+        } catch (e) {
+          console.warn("Firestore Custom List Save Failed:", e.message);
+          return "local-custom-" + Date.now();
+        }
+      }
+
+      async function updateCustomList(id, data) {
+        if (!id || id.startsWith('local-')) return;
+        try {
+          const listRef = doc(window.db, "customLists", id);
+          await updateDoc(listRef, data);
+        } catch (e) {
+          console.warn("Firestore Custom List Update Failed:", e.message);
+        }
+      }
+
+      async function removeCustomList(id) {
+        if (!id || id.startsWith('local-')) return;
+        try {
+          await deleteDoc(doc(window.db, "customLists", id));
+        } catch (e) {
+          console.warn("Firestore Custom List Remove Failed:", e.message);
+        }
+      }
+
+      // Real-time Listeners
+      function subscribeToEntries(callback) {
+        const q = query(collection(window.db, "movies"));
+        return onSnapshot(q, (snapshot) => {
+          const entries = [];
+          snapshot.forEach((doc) => {
+            entries.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          callback(entries);
+        }, (error) => {
+          console.error("Firestore subscribeToEntries error:", error);
+        });
+      }
+
+      function subscribeToWatchLists(callback) {
+        return onSnapshot(collection(window.db, "watchLists"), (snapshot) => {
+          const lists = [];
+          snapshot.forEach((doc) => {
+            lists.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          callback(lists);
+        }, (error) => {
+          console.error("Firestore subscribeToWatchLists error:", error);
+        });
+      }
+
+      function subscribeToCustomLists(callback) {
+        return onSnapshot(collection(window.db, "customLists"), (snapshot) => {
+          const lists = [];
+          snapshot.forEach((doc) => {
+            lists.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          callback(lists);
+        }, (error) => {
+          console.error("Firestore subscribeToCustomLists error:", error);
+        });
+      }
+
+      // Search History Cloud Sync
+      async function loadRecentSearches() {
+        try {
+          const querySnapshot = await getDocs(collection(window.db, "recentSearches"));
+          const searches = [];
+          querySnapshot.forEach((doc) => {
+            searches.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          return searches;
+        } catch (e) {
+          console.warn("Firestore RecentSearches Load Failed:", e.message);
+          return [];
+        }
+      }
+
+      async function saveRecentSearch(item) {
+        if (!item) return "";
+        const id = String(item.id || item.query || ("search-" + Date.now()));
+        try {
+          await setDoc(doc(window.db, "recentSearches", id), cleanFirestoreData({
+            ...item,
+            id,
+            timestamp: typeof item.timestamp === 'number' ? item.timestamp : Date.now()
+          }), { merge: true });
+          return id;
+        } catch (e) {
+          console.warn("Firestore RecentSearch Save Failed:", e.message);
+          return id;
+        }
+      }
+
+      async function removeRecentSearch(id) {
+        if (!id) return;
+        try {
+          await deleteDoc(doc(window.db, "recentSearches", String(id)));
+        } catch (e) {
+          console.warn("Firestore RecentSearch Delete Failed:", e.message);
+        }
+      }
+
+      async function clearRecentSearches() {
+        try {
+          const snapshot = await getDocs(collection(window.db, "recentSearches"));
+          const promises = [];
+          snapshot.forEach((d) => {
+            promises.push(deleteDoc(doc(window.db, "recentSearches", d.id)));
+          });
+          await Promise.all(promises);
+        } catch (e) {
+          console.warn("Firestore RecentSearches Clear Failed:", e.message);
+        }
+      }
+
+      function subscribeToRecentSearches(callback) {
+        return onSnapshot(collection(window.db, "recentSearches"), (snapshot) => {
+          const searches = [];
+          snapshot.forEach((doc) => {
+            searches.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          callback(searches);
+        }, (error) => {
+          console.error("Firestore subscribeToRecentSearches error:", error);
+        });
+      }
+
+      // Pinned Talent Cloud Sync
+      async function loadPinnedTalents() {
+        try {
+          const querySnapshot = await getDocs(collection(window.db, "pinnedTalents"));
+          const talents = [];
+          querySnapshot.forEach((doc) => {
+            talents.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          return talents;
+        } catch (e) {
+          console.warn("Firestore PinnedTalents Load Failed:", e.message);
+          return [];
+        }
+      }
+
+      async function savePinnedTalent(talent) {
+        if (!talent || !talent.id) return "";
+        const id = String(talent.id);
+        try {
+          await setDoc(doc(window.db, "pinnedTalents", id), cleanFirestoreData({
+            ...talent,
+            id: Number(talent.id) || talent.id,
+            pinnedAt: talent.pinnedAt || Date.now()
+          }), { merge: true });
+          return id;
+        } catch (e) {
+          console.warn("Firestore PinnedTalent Save Failed:", e.message);
+          return id;
+        }
+      }
+
+      async function removePinnedTalent(id) {
+        if (!id) return;
+        try {
+          await deleteDoc(doc(window.db, "pinnedTalents", String(id)));
+        } catch (e) {
+          console.warn("Firestore PinnedTalent Delete Failed:", e.message);
+        }
+      }
+
+      async function clearPinnedTalents() {
+        try {
+          const snapshot = await getDocs(collection(window.db, "pinnedTalents"));
+          const promises = [];
+          snapshot.forEach((d) => {
+            promises.push(deleteDoc(doc(window.db, "pinnedTalents", d.id)));
+          });
+          await Promise.all(promises);
+        } catch (e) {
+          console.warn("Firestore PinnedTalents Clear Failed:", e.message);
+        }
+      }
+
+      function subscribeToPinnedTalents(callback) {
+        return onSnapshot(collection(window.db, "pinnedTalents"), (snapshot) => {
+          const talents = [];
+          snapshot.forEach((doc) => {
+            talents.push(cleanFirestoreData({ id: doc.id, ...doc.data() }));
+          });
+          callback(talents);
+        }, (error) => {
+          console.error("Firestore subscribeToPinnedTalents error:", error);
+        });
+      }
+
+      window.addMovie = addMovie;
+      window.loadMovies = loadMovies;
+      window.removeMovie = removeMovie;
+      window.updateMovie = updateMovie;
+      window.loadWatchLists = loadWatchLists;
+      window.saveWatchList = saveWatchList;
+      window.updateWatchList = updateWatchList;
+      window.removeWatchList = removeWatchList;
+      window.loadCustomLists = loadCustomLists;
+      window.saveCustomList = saveCustomList;
+      window.updateCustomList = updateCustomList;
+      window.removeCustomList = removeCustomList;
+      window.subscribeToEntries = subscribeToEntries;
+      window.subscribeToWatchLists = subscribeToWatchLists;
+      window.subscribeToCustomLists = subscribeToCustomLists;
+
+      window.loadRecentSearches = loadRecentSearches;
+      window.saveRecentSearch = saveRecentSearch;
+      window.removeRecentSearch = removeRecentSearch;
+      window.clearRecentSearches = clearRecentSearches;
+      window.subscribeToRecentSearches = subscribeToRecentSearches;
+
+      window.loadPinnedTalents = loadPinnedTalents;
+      window.savePinnedTalent = savePinnedTalent;
+      window.removePinnedTalent = removePinnedTalent;
+      window.clearPinnedTalents = clearPinnedTalents;
+      window.subscribeToPinnedTalents = subscribeToPinnedTalents;
+    </script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('SW registered:', registration);
+            })
+            .catch(error => {
+              console.log('SW registration failed:', error);
+            });
+        });
+      }
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
